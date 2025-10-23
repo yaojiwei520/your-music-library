@@ -1,4 +1,4 @@
 # requirements.txt
-fastmcp==0.0.10
+fastmcp==2.12.5 # 或者更高的最新稳定版本，你可以到 PyPI 官网 fastmcp 页面查看
 psycopg2-binary
 requests
