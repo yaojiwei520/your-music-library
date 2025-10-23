@@ -1,0 +1,2 @@
+# requirements_sync_music.txt
+requests

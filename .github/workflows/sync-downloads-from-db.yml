@@ -1,0 +1,69 @@
+# .github/workflows/sync-downloads-from-db.yml
+name: Sync Downloads from Vercel Postgres
+
+on:
+  # 通过 Repository Dispatch 事件触发，当 FastMCP 服务告知数据库有变化时
+  repository_dispatch:
+    types: [db_music_updated] # 必须与 FastMCP 服务中定义的 event_type 一致
+
+  # 🔔 (可选) 可以添加一个定时触发器，以防万一 Webhook 失败，作为额外安全网
+  # schedule:
+  #   - cron: '0 12 * * *' # 每天 UTC 12:00 运行一次
+
+  # 允许手动触发
+  workflow_dispatch:
+
+jobs:
+  sync_downloads_job:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 必须有写入权限才能修改 downloads/ 目录
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.x
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements_sync_music.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements_sync_music.txt
+
+      - name: Run music downloads sync script
+        env:
+          # 用于 FastMCP 服务
+          MCP_SERVICE_URL: ${{ secrets.MCP_SERVICE_URL }}
+          # 用于外部下载 API。建议也作为 GitHub Secret 配置。
+          VKEYS_BASE_URL: ${{ secrets.VKEYS_BASE_URL }} # 假设你已在 GitHub Secrets 中配置 VKEYS_BASE_URL
+        run: python sync_music_downloads.py
+
+      - name: Commit downloaded files
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 检查 downloads 目录是否存在，或者是否有对它的更改
+          if [ -d "downloads" ]; then
+            git add downloads/
+          else
+            echo "downloads directory does not exist or nothing to add."
+          fi
+
+          if git diff --staged --quiet && git diff --quiet; then
+            echo "No file changes to commit."
+          else
+            git commit -m "sync(downloads): Update music downloads from Vercel Postgres [skip ci]"
+            git push
+            echo "Committed file changes successfully."
+          fi

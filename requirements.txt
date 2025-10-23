@@ -1,0 +1,4 @@
+# requirements.txt
+fastmcp==0.0.10
+psycopg2-binary
+requests
